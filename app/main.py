@@ -1,22 +1,27 @@
-import time
-from datetime import datetime
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import routes
-from app.api.loggers import get_logger, generate_correlation_id, AppLogger
+from app.api import chat_routes
+from app.logger import setup_logger
+from app.middleware import LoggingMiddleware, RequestBodyLoggingMiddleware
 import os
+
+# Setup logger
+logger = setup_logger("docuchat.main")
 
 # Create uploads directory if it doesn't exist
 os.makedirs("uploads", exist_ok=True)
+logger.info("Uploads directory initialized")
 
 app = FastAPI(
     title="DocuChat API",
-    description="Intelligent Document Assistant - Phase 1: Basic API",
-    version="0.1.0"
+    description="Intelligent Document Assistant - Phase 3: Azure OpenAI Integration",
+    version="0.3.0"
 )
 
-# Get logger for main module
-logger = get_logger(__name__)
+# Add logging middleware (order matters - add these first)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(RequestBodyLoggingMiddleware)
 
 # Add CORS middleware for frontend access later
 app.add_middleware(
@@ -27,71 +32,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def logging_middleware(request: Request, call_next):
-    """Add correlation ID and request logging"""
-    correlation_id = generate_correlation_id()
-    
-    # Add correlation ID to request state
-    request.state.correlation_id = correlation_id
-    
-    # Set correlation ID for logger
-    logger.set_correlation_id(correlation_id)
-    
-    start_time = time.time()
-    
-    logger.info(f"Request started: {request.method} {request.url.path}")
-    
-    response = await call_next(request)
-    
-    process_time = time.time() - start_time
-    
-    logger.info(
-        f"Request completed: {request.method} {request.url.path} - "
-        f"Status: {response.status_code} - Duration: {process_time:.3f}s"
-    )
-    
-    return response
-
-def get_request_logger(request: Request) -> AppLogger:
-    """Dependency to inject logger with correlation ID"""
-    correlation_id = getattr(request.state, 'correlation_id', 'unknown')
-    request_logger = get_logger(f"{__name__}.request")
-    request_logger.set_correlation_id(correlation_id)
-    return request_logger
-
 # Include routes
 app.include_router(routes.router)
+app.include_router(chat_routes.router)
 
 @app.get("/")
-async def root(logger: AppLogger = Depends(get_request_logger)):
+async def root():
     logger.info("Root endpoint accessed")
-    
     return {
         "message": "Welcome to DocuChat API",
-        "version": "0.1.0",
-        "phase": "Phase 1 - FastAPI Foundation",
+        "version": "0.3.0",
+        "phase": "Phase 3 - Azure OpenAI Integration",
         "endpoints": {
             "health": "/health",
             "upload": "/api/upload",
-            "documents": "/api/documents"
+            "documents": "/api/documents",
+            "chat": "/api/chat",
+            "chat_stream": "/api/chat/stream",
+            "test_connection": "/api/chat/test"
         }
     }
 
 @app.get("/health")
-async def health_check(logger: AppLogger = Depends(get_request_logger)):
-    logger.info("Health check performed")
-    
+async def health_check():
+    logger.debug("Health check endpoint called")
     return {
         "status": "healthy",
-        "service": "DocuChat API",
-        "timestamp": datetime.now().isoformat()
+        "service": "DocuChat API"
     }
-
-# Start the development server
-# uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-
-
 # Start the development server
 # uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

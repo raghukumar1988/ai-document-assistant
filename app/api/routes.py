@@ -1,23 +1,16 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
-from app.api.loggers import get_logger, AppLogger
+from app.logger import setup_logger
 import os
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 router = APIRouter(prefix="/api", tags=["documents"])
+logger = setup_logger("docuchat.routes")
 
 UPLOAD_DIR = "uploads"
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".doc", ".docx"}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
-def get_request_logger(request: Request) -> AppLogger:
-    """Dependency to inject logger with correlation ID"""
-    correlation_id = getattr(request.state, 'correlation_id', 'unknown')
-    request_logger = get_logger(f"{__name__}.request")
-    request_logger.set_correlation_id(correlation_id)
-    return request_logger
 
 def get_file_extension(filename: str) -> str:
     return Path(filename).suffix.lower()
@@ -26,50 +19,61 @@ def is_allowed_file(filename: str) -> bool:
     return get_file_extension(filename) in ALLOWED_EXTENSIONS
 
 @router.post("/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    logger: AppLogger = Depends(get_request_logger)
-):
+async def upload_document(request: Request, file: UploadFile = File(...)):
     """
     Upload a document (PDF, TXT, DOC, DOCX)
     """
-    logger.info(f"Document upload started: {file.filename}")
+    request_id = getattr(request.state, "request_id", "unknown")
+    
+    logger.info(
+        f"Upload request received for file: {file.filename}",
+        extra={
+            "request_id": request_id,
+            "filename": file.filename,
+            "content_type": file.content_type
+        }
+    )
+    
+    # Validate file type
+    if not is_allowed_file(file.filename):
+        logger.warning(
+            f"Invalid file type attempted: {file.filename}",
+            extra={
+                "request_id": request_id,
+                "filename": file.filename,
+                "extension": get_file_extension(file.filename)
+            }
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    # Generate unique filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    original_name = Path(file.filename).stem
+    extension = get_file_extension(file.filename)
+    unique_filename = f"{original_name}_{timestamp}{extension}"
+    
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
     
     try:
-        # Validate file type
-        if not is_allowed_file(file.filename):
-            logger.warning(f"Invalid file type attempted: {file.filename}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
-            )
-        
-        # Read file content and check size
-        content = await file.read()
-        file_size = len(content)
-        
-        if file_size > MAX_FILE_SIZE:
-            logger.warning(f"File too large: {file.filename} ({file_size} bytes)")
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
-            )
-        
-        # Generate unique filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        original_name = Path(file.filename).stem
-        extension = get_file_extension(file.filename)
-        unique_filename = f"{original_name}_{timestamp}{extension}"
-        
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
         # Save file
         with open(file_path, "wb") as buffer:
-            buffer.write(content)
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Get file size
+        file_size = os.path.getsize(file_path)
         
         logger.info(
-            f"Document uploaded successfully: {file.filename} -> {unique_filename} "
-            f"({file_size} bytes)"
+            f"File uploaded successfully: {unique_filename}",
+            extra={
+                "request_id": request_id,
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "size_bytes": file_size,
+                "file_path": file_path
+            }
         )
         
         return JSONResponse(
@@ -81,59 +85,54 @@ async def upload_document(
                 "size_bytes": file_size,
                 "size_mb": round(file_size / (1024 * 1024), 2),
                 "upload_time": timestamp,
-                "file_path": file_path
+                "file_path": file_path,
+                "request_id": request_id
             }
         )
     
-    except HTTPException:
-        # Re-raise HTTP exceptions (already logged above)
-        raise
     except Exception as e:
-        logger.error(f"Document upload failed: {file.filename} - {str(e)}", exc_info=True)
+        logger.error(
+            f"Failed to upload file: {str(e)}",
+            extra={
+                "request_id": request_id,
+                "filename": file.filename,
+                "error": str(e)
+            },
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
-            detail="Failed to upload file"
+            detail=f"Failed to upload file: {str(e)}"
         )
     finally:
-        # Ensure file handle is closed
-        if hasattr(file, 'file') and file.file:
-            file.file.close()
+        file.file.close()
 
 @router.get("/documents")
-async def list_documents(logger: AppLogger = Depends(get_request_logger)):
+async def list_documents(request: Request):
     """
     List all uploaded documents
     """
-    logger.info("Listing documents requested")
+    request_id = getattr(request.state, "request_id", "unknown")
+    
+    logger.info("Listing documents", extra={"request_id": request_id})
     
     try:
-        if not os.path.exists(UPLOAD_DIR):
-            logger.warning(f"Upload directory does not exist: {UPLOAD_DIR}")
-            return {
-                "total_documents": 0,
-                "documents": []
-            }
-        
         files = []
         for filename in os.listdir(UPLOAD_DIR):
             file_path = os.path.join(UPLOAD_DIR, filename)
             if os.path.isfile(file_path):
-                try:
-                    file_size = os.path.getsize(file_path)
-                    files.append({
-                        "filename": filename,
-                        "size_bytes": file_size,
-                        "size_mb": round(file_size / (1024 * 1024), 2),
-                        "extension": get_file_extension(filename),
-                        "modified_date": datetime.fromtimestamp(
-                            os.path.getmtime(file_path)
-                        ).isoformat()
-                    })
-                except OSError as e:
-                    logger.warning(f"Could not read file info for {filename}: {str(e)}")
-                    continue
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    "filename": filename,
+                    "size_bytes": file_size,
+                    "size_mb": round(file_size / (1024 * 1024), 2),
+                    "extension": get_file_extension(filename)
+                })
         
-        logger.info(f"Documents listed successfully: {len(files)} files found")
+        logger.info(
+            f"Found {len(files)} documents",
+            extra={"request_id": request_id, "count": len(files)}
+        )
         
         return {
             "total_documents": len(files),
@@ -141,50 +140,58 @@ async def list_documents(logger: AppLogger = Depends(get_request_logger)):
         }
     
     except Exception as e:
-        logger.error(f"Failed to list documents: {str(e)}", exc_info=True)
+        logger.error(
+            f"Failed to list documents: {str(e)}",
+            extra={"request_id": request_id, "error": str(e)},
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
-            detail="Failed to list documents"
+            detail=f"Failed to list documents: {str(e)}"
         )
 
 @router.delete("/documents/{filename}")
-async def delete_document(
-    filename: str,
-    logger: AppLogger = Depends(get_request_logger)
-):
+async def delete_document(request: Request, filename: str):
     """
     Delete a specific document
     """
-    logger.info(f"Document deletion requested: {filename}")
+    request_id = getattr(request.state, "request_id", "unknown")
+    
+    logger.info(
+        f"Delete request for: {filename}",
+        extra={"request_id": request_id, "filename": filename}
+    )
+    
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        logger.warning(
+            f"Document not found: {filename}",
+            extra={"request_id": request_id, "filename": filename}
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document '{filename}' not found"
+        )
     
     try:
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        
-        if not os.path.exists(file_path):
-            logger.warning(f"Document not found for deletion: {filename}")
-            raise HTTPException(
-                status_code=404,
-                detail=f"Document '{filename}' not found"
-            )
-        
-        # Get file size before deletion for logging
-        file_size = os.path.getsize(file_path)
-        
         os.remove(file_path)
-        
-        logger.info(f"Document deleted successfully: {filename} ({file_size} bytes)")
-        
+        logger.info(
+            f"Document deleted successfully: {filename}",
+            extra={"request_id": request_id, "filename": filename}
+        )
         return {
             "message": "Document deleted successfully",
-            "filename": filename
+            "filename": filename,
+            "request_id": request_id
         }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions (already logged above)
-        raise
     except Exception as e:
-        logger.error(f"Failed to delete document {filename}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Failed to delete document: {str(e)}",
+            extra={"request_id": request_id, "filename": filename, "error": str(e)},
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
-            detail="Failed to delete document"
+            detail=f"Failed to delete document: {str(e)}"
         )
