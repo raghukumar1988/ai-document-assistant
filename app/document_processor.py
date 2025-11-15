@@ -1,4 +1,4 @@
-import PyPDF2
+from pypdf import PdfReader
 from pathlib import Path
 from typing import Optional
 from app.logger import setup_logger
@@ -83,7 +83,7 @@ class DocumentProcessor:
         text_parts = []
         
         with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = PdfReader(file)
             num_pages = len(pdf_reader.pages)
             
             logger.debug(
@@ -152,7 +152,7 @@ class DocumentProcessor:
         if path.suffix.lower() == '.pdf':
             try:
                 with open(file_path, 'rb') as file:
-                    pdf_reader = PyPDF2.PdfReader(file)
+                    pdf_reader = PdfReader(file)
                     metadata["num_pages"] = len(pdf_reader.pages)
                     
                     # Extract PDF metadata if available
