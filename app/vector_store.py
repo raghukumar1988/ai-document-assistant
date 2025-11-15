@@ -27,7 +27,7 @@ class VectorStoreService:
         self.embeddings = AzureOpenAIEmbeddings(
             azure_endpoint=settings.azure_openai_endpoint,
             api_key=settings.azure_openai_api_key,
-            azure_deployment="text-embedding-ada-002",  # Standard embedding model
+            azure_deployment=settings.azure_openai_embedding_deployment_name,
             api_version=settings.azure_openai_api_version,
         )
         

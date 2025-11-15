@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DocuChat Streaming Demo</title>
+</head>
+<body>
+    <h1>DocuChat Streaming</h1>
+    <input type="text" id="question" placeholder="Ask a question..." style="width: 400px">
+    <button onclick="askQuestion()">Ask</button>
+    <div id="response" style="margin-top: 20px; white-space: pre-wrap;"></div>
+    
+    <script>
+        function askQuestion() {
+            const question = document.getElementById('question').value;
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = '';
+            
+            const eventSource = new EventSource(
+                `http://localhost:8000/api/chat/stream?message=${encodeURIComponent(question)}`
+            );
+            
+            eventSource.addEventListener('message', (e) => {
+                const data = JSON.parse(e.data);
+                if (data.chunk) {
+                    responseDiv.textContent += data.chunk;
+                }
+            });
+            
+            eventSource.addEventListener('done', (e) => {
+                eventSource.close();
+                console.log('Stream completed');
+            });
+            
+            eventSource.onerror = (e) => {
+                eventSource.close();
+                console.error('Stream error', e);
+            };
+        }
+    </script>
+</body>
+</html>

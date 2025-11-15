@@ -18,6 +18,12 @@ class Settings(BaseSettings):
         default="2024-02-15-preview",
         env="AZURE_OPENAI_API_VERSION"
     )
+
+    # Embedding Deployment (Phase 4+)
+    azure_openai_embedding_deployment_name: str = Field(
+        default="text-embedding-ada-002",
+        env="AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"
+    )
     
     # Model Configuration
     azure_openai_model_name: str = Field(default="gpt-4", env="AZURE_OPENAI_MODEL_NAME")

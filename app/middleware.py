@@ -80,44 +80,46 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 class RequestBodyLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log request bodies (be careful with sensitive data)"""
     
-    async def set_body(self, request: Request):
-        """Read and store the request body"""
-        receive_ = await request._receive()
-        
-        async def receive() -> Message:
-            return receive_
-        
-        request._receive = receive
-    
     async def dispatch(self, request: Request, call_next):
+        # Skip body logging for streaming endpoints
+        if "/stream" in request.url.path:
+            return await call_next(request)
+        
         # Skip body logging for file uploads (too large)
         if request.method in ["POST", "PUT", "PATCH"]:
             content_type = request.headers.get("content-type", "")
             
             # Only log JSON bodies
             if "application/json" in content_type:
-                await self.set_body(request)
-                body = await request.body()
-                
-                if body:
-                    try:
-                        body_json = json.loads(body.decode())
-                        
-                        logger.debug(
-                            "Request body received",
-                            extra={
-                                "request_id": getattr(request.state, "request_id", "unknown"),
-                                "body": body_json,
-                                "content_type": content_type,
-                            }
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Could not parse request body: {str(e)}",
-                            extra={
-                                "request_id": getattr(request.state, "request_id", "unknown"),
-                            }
-                        )
+                try:
+                    body = await request.body()
+                    
+                    if body:
+                        try:
+                            body_json = json.loads(body.decode())
+                            
+                            logger.debug(
+                                "Request body received",
+                                extra={
+                                    "request_id": getattr(request.state, "request_id", "unknown"),
+                                    "body": body_json,
+                                    "content_type": content_type,
+                                }
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Could not parse request body: {str(e)}",
+                                extra={
+                                    "request_id": getattr(request.state, "request_id", "unknown"),
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not read request body: {str(e)}",
+                        extra={
+                            "request_id": getattr(request.state, "request_id", "unknown"),
+                        }
+                    )
         
         response = await call_next(request)
         return response

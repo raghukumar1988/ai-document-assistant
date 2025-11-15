@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import routes
 from app.api import chat_routes
 from app.api import rag_routes
+from app.api import rag_stream_routes
 from app.logger import setup_logger
 from app.middleware import LoggingMiddleware, RequestBodyLoggingMiddleware
 import os
@@ -17,8 +18,8 @@ logger.info("Directories initialized")
 
 app = FastAPI(
     title="DocuChat API",
-    description="Intelligent Document Assistant - Phase 4: RAG Implementation",
-    version="0.4.0"
+    description="Intelligent Document Assistant - Phase 5: Streaming Responses",
+    version="0.5.0"
 )
 
 # Add logging middleware (order matters - add these first)
@@ -38,14 +39,15 @@ app.add_middleware(
 app.include_router(routes.router)
 app.include_router(chat_routes.router)
 app.include_router(rag_routes.router)
+app.include_router(rag_stream_routes.router)
 
 @app.get("/")
 async def root():
     logger.info("Root endpoint accessed")
     return {
         "message": "Welcome to DocuChat API",
-        "version": "0.4.0",
-        "phase": "Phase 4 - RAG Implementation",
+        "version": "0.5.0",
+        "phase": "Phase 5 - Streaming Responses",
         "endpoints": {
             "health": "/health",
             "upload": "/api/upload",
@@ -55,6 +57,7 @@ async def root():
             "test_connection": "/api/chat/test",
             "process_document": "/api/rag/process",
             "ask_question": "/api/rag/ask",
+            "ask_question_stream": "/api/rag/ask/stream",
             "processed_documents": "/api/rag/documents"
         }
     }
@@ -66,5 +69,3 @@ async def health_check():
         "status": "healthy",
         "service": "DocuChat API"
     }
-# Start the development server
-# uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
