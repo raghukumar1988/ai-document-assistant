@@ -29,7 +29,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         f"Upload request received for file: {file.filename}",
         extra={
             "request_id": request_id,
-            "filename": file.filename,
+            "uploaded_filename": file.filename,
             "content_type": file.content_type
         }
     )
@@ -69,7 +69,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             f"File uploaded successfully: {unique_filename}",
             extra={
                 "request_id": request_id,
-                "filename": unique_filename,
+                "uploaded_filename": unique_filename,
                 "original_filename": file.filename,
                 "size_bytes": file_size,
                 "file_path": file_path
@@ -95,7 +95,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
             f"Failed to upload file: {str(e)}",
             extra={
                 "request_id": request_id,
-                "filename": file.filename,
+                "uploaded_filename": file.filename,
                 "error": str(e)
             },
             exc_info=True

@@ -46,7 +46,7 @@ async def chat(request: Request, chat_request: ChatRequest):
         f"Chat request received",
         extra={
             "request_id": request_id,
-            "user_message": chat_request.message[:100],  # Log first 100 chars
+            "message": chat_request.message[:100],  # Log first 100 chars
             "has_history": bool(chat_request.chat_history),
         }
     )
@@ -121,7 +121,7 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
         f"Streaming chat request received",
         extra={
             "request_id": request_id,
-            "user_message": chat_request.message[:100],
+            "message": chat_request.message[:100],
         }
     )
     

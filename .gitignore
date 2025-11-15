@@ -217,3 +217,18 @@ __marimo__/
 .env
 .env.local
 .env.*.local
+
+*.pyc
+__pycache__/
+uploads/
+logs/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+*.bin
