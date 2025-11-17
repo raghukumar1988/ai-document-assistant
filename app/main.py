@@ -5,6 +5,7 @@ from app.api import chat_routes
 from app.api import rag_routes
 from app.api import rag_stream_routes
 from app.api import agent_routes
+from app.api import graph_routes
 from app.logger import setup_logger
 from app.middleware import LoggingMiddleware, RequestBodyLoggingMiddleware
 import os
@@ -19,8 +20,8 @@ logger.info("Directories initialized")
 
 app = FastAPI(
     title="DocuChat API",
-    description="Intelligent Document Assistant - Phase 6: AI Agents with Tools",
-    version="0.6.0"
+    description="Intelligent Document Assistant - Phase 7: LangGraph Workflows",
+    version="0.7.0"
 )
 
 # Add logging middleware (order matters - add these first)
@@ -42,14 +43,15 @@ app.include_router(chat_routes.router)
 app.include_router(rag_routes.router)
 app.include_router(rag_stream_routes.router)
 app.include_router(agent_routes.router)
+app.include_router(graph_routes.router)
 
 @app.get("/")
 async def root():
     logger.info("Root endpoint accessed")
     return {
         "message": "Welcome to DocuChat API",
-        "version": "0.6.0",
-        "phase": "Phase 6 - AI Agents with Tools",
+        "version": "0.7.0",
+        "phase": "Phase 7 - LangGraph Workflows",
         "endpoints": {
             "health": "/health",
             "upload": "/api/upload",
@@ -64,7 +66,11 @@ async def root():
             "agent_tools": "/api/agent/tools",
             "agent_run": "/api/agent/run",
             "agent_stream": "/api/agent/stream",
-            "agent_test": "/api/agent/test"
+            "agent_test": "/api/agent/test",
+            "workflows": "/api/graph/workflows",
+            "research_workflow": "/api/graph/research",
+            "chat_workflow": "/api/graph/chat",
+            "research_stream": "/api/graph/research/stream"
         }
     }
 
