@@ -232,3 +232,4 @@ logs/
 *.sqlite3
 
 *.bin
+.streamlit/secrets.toml
